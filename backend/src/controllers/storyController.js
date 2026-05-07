@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Story } from "../models/Story.js";
+import { User } from "../models/User.js";
 import { scrapeHackerNews } from "../services/scraperService.js";
 
 const parsePagination = (query) => {
@@ -66,25 +67,22 @@ export const toggleBookmark = async (req, res, next) => {
       throw error;
     }
 
-    const storyId = story._id.toString();
-    const existingBookmark = req.user.bookmarks.some(
-      (bookmark) => bookmark._id.toString() === storyId
-    );
+    const existingBookmark = req.user.bookmarks.some((bookmark) => {
+      const bookmarkId = bookmark._id ? bookmark._id.toString() : bookmark.toString();
+      return bookmarkId === story._id.toString();
+    });
 
     if (existingBookmark) {
-      req.user.bookmarks = req.user.bookmarks.filter(
-        (bookmark) => bookmark._id.toString() !== storyId
-      );
+      await User.findByIdAndUpdate(req.user._id, { $pull: { bookmarks: story._id } });
     } else {
-      req.user.bookmarks.push(story._id);
+      await User.findByIdAndUpdate(req.user._id, { $addToSet: { bookmarks: story._id } });
     }
 
-    await req.user.save();
-    await req.user.populate("bookmarks");
+    const user = await User.findById(req.user._id).populate("bookmarks");
 
     res.json({
       bookmarked: !existingBookmark,
-      bookmarks: req.user.bookmarks
+      bookmarks: user.bookmarks
     });
   } catch (error) {
     next(error);

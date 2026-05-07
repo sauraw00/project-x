@@ -47,7 +47,7 @@ export const login = async (req, res, next) => {
     const { email, password } = req.body;
     validateCredentials({ email, password });
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email }).select("+password").populate("bookmarks");
     if (!user || !(await user.comparePassword(password))) {
       const error = new Error("Invalid email or password");
       error.statusCode = 401;
