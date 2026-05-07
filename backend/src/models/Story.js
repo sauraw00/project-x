@@ -2,8 +2,9 @@ import mongoose from "mongoose";
 
 const storySchema = new mongoose.Schema(
   {
+    hnId: { type: String, required: true, unique: true, index: true },
     title: { type: String, required: true, trim: true },
-    url: { type: String, required: true, unique: true },
+    url: { type: String, required: true },
     points: { type: Number, default: 0 },
     author: { type: String, default: "unknown" },
     postedAt: { type: String, default: "" }
