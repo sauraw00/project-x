@@ -3,97 +3,126 @@ import { Story } from "../models/Story.js";
 import { User } from "../models/User.js";
 import { scrapeHackerNews } from "../services/scraperService.js";
 
-const parsePagination = (query) => {
-  const page = Math.max(Number(query.page) || 1, 1);
-  const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
-  return { page, limit, skip: (page - 1) * limit };
+const getPagination = ({ page = 1, limit = 10 }) => {
+  const currentPage = Math.max(parseInt(page), 1);
+  const perPage = Math.min(Math.max(parseInt(limit), 1), 50);
+
+  return {
+    currentPage,
+    perPage,
+    offset: (currentPage - 1) * perPage
+  };
 };
 
-const ensureObjectId = (id) => {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    const error = new Error("Invalid story id");
-    error.statusCode = 400;
-    throw error;
+const validateStoryId = (storyId) => {
+  if (!mongoose.Types.ObjectId.isValid(storyId)) {
+    const err = new Error("Story ID is not valid");
+    err.statusCode = 400;
+    throw err;
   }
 };
 
 export const getStories = async (req, res, next) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
-    const [stories, total] = await Promise.all([
-      Story.find().sort({ points: -1, createdAt: -1 }).skip(skip).limit(limit),
-      Story.countDocuments()
+    const { currentPage, perPage, offset } = getPagination(req.query);
+
+    const storiesPromise = Story.find({})
+      .sort({ points: -1, createdAt: -1 })
+      .skip(offset)
+      .limit(perPage);
+
+    const totalPromise = Story.countDocuments();
+
+    const [stories, totalStories] = await Promise.all([
+      storiesPromise,
+      totalPromise
     ]);
 
-    res.json({
-      stories,
+    return res.status(200).json({
+      success: true,
+      data: stories,
       pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
+        currentPage,
+        perPage,
+        totalStories,
+        totalPages: Math.ceil(totalStories / perPage)
       }
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 export const getStoryById = async (req, res, next) => {
   try {
-    ensureObjectId(req.params.id);
-    const story = await Story.findById(req.params.id);
+    const { id } = req.params;
+
+    validateStoryId(id);
+
+    const story = await Story.findOne({ _id: id });
 
     if (!story) {
-      const error = new Error("Story not found");
-      error.statusCode = 404;
-      throw error;
+      const err = new Error("No story found");
+      err.statusCode = 404;
+      throw err;
     }
 
-    res.json({ story });
-  } catch (error) {
-    next(error);
+    return res.status(200).json({
+      success: true,
+      story
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
 export const toggleBookmark = async (req, res, next) => {
   try {
-    ensureObjectId(req.params.id);
-    const story = await Story.findById(req.params.id);
+    const { id } = req.params;
+
+    validateStoryId(id);
+
+    const story = await Story.findById(id);
 
     if (!story) {
-      const error = new Error("Story not found");
-      error.statusCode = 404;
-      throw error;
+      const err = new Error("Story does not exist");
+      err.statusCode = 404;
+      throw err;
     }
 
-    const existingBookmark = req.user.bookmarks.some((bookmark) => {
-      const bookmarkId = bookmark._id ? bookmark._id.toString() : bookmark.toString();
-      return bookmarkId === story._id.toString();
+    const alreadyBookmarked = req.user.bookmarks.some(
+      (item) => item.toString() === id
+    );
+
+    const updateQuery = alreadyBookmarked
+      ? { $pull: { bookmarks: id } }
+      : { $addToSet: { bookmarks: id } };
+
+    await User.findByIdAndUpdate(req.user._id, updateQuery);
+
+    const updatedUser = await User.findById(req.user._id).populate("bookmarks");
+
+    return res.status(200).json({
+      success: true,
+      bookmarked: !alreadyBookmarked,
+      bookmarks: updatedUser.bookmarks
     });
-
-    if (existingBookmark) {
-      await User.findByIdAndUpdate(req.user._id, { $pull: { bookmarks: story._id } });
-    } else {
-      await User.findByIdAndUpdate(req.user._id, { $addToSet: { bookmarks: story._id } });
-    }
-
-    const user = await User.findById(req.user._id).populate("bookmarks");
-
-    res.json({
-      bookmarked: !existingBookmark,
-      bookmarks: user.bookmarks
-    });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
-export const scrapeStories = async (_req, res, next) => {
+export const scrapeStories = async (req, res, next) => {
   try {
-    const stories = await scrapeHackerNews();
-    res.json({ message: "Scrape completed", count: stories.length, stories });
-  } catch (error) {
-    next(error);
+    const scrapedStories = await scrapeHackerNews();
+
+    return res.status(200).json({
+      success: true,
+      message: "Stories scraped successfully",
+      total: scrapedStories.length,
+      stories: scrapedStories
+    });
+  } catch (err) {
+    next(err);
   }
 };
