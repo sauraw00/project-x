@@ -3,6 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
 import storyRoutes from "./routes/storyRoutes.js";
+import { scrapeStories } from "./controllers/storyController.js";
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.post("/api/scrape", scrapeStories);
 app.use("/api/stories", storyRoutes);
 
 app.use((req, res) => {

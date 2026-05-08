@@ -43,7 +43,7 @@ const StoriesPage = () => {
     setError("");
 
     try {
-      await api.post("/stories/scrape");
+      await api.post("/scrape");
       await fetchStories(1);
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Unable to scrape Hacker News");
