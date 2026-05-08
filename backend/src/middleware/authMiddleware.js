@@ -13,7 +13,7 @@ export const requireAuth = async (req, _res, next) => {
     }
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(payload.userId).populate("bookmarks");
+    const user = await User.findById(payload.userId || payload.sub).populate("bookmarks");
 
     if (!user) {
       const error = new Error("User not found");

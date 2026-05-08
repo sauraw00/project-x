@@ -9,10 +9,31 @@ const getBookmarkIds = (bookmarks = []) => {
   return bookmarks.map((bookmark) => (typeof bookmark === "string" ? bookmark : bookmark._id));
 };
 
+const emptyPagination = { page: 1, limit: 10, total: 0, pages: 1 };
+
+const normalizeStoriesResponse = (response) => {
+  const responseStories = Array.isArray(response?.data)
+    ? response.data
+    : Array.isArray(response?.stories)
+      ? response.stories
+      : [];
+  const responsePagination = response?.pagination || {};
+
+  return {
+    stories: responseStories,
+    pagination: {
+      page: responsePagination.currentPage || responsePagination.page || 1,
+      limit: responsePagination.perPage || responsePagination.limit || 10,
+      total: responsePagination.totalStories || responsePagination.total || responseStories.length,
+      pages: responsePagination.totalPages || responsePagination.pages || 1
+    }
+  };
+};
+
 const StoriesPage = () => {
   const { isAuthenticated, updateBookmarks, user } = useAuth();
   const [stories, setStories] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
+  const [pagination, setPagination] = useState(emptyPagination);
   const [isLoading, setIsLoading] = useState(true);
   const [isScraping, setIsScraping] = useState(false);
   const [error, setError] = useState("");
@@ -25,8 +46,10 @@ const StoriesPage = () => {
 
     try {
       const { data } = await api.get(`/stories?page=${page}&limit=10`);
-      setStories(data.stories);
-      setPagination(data.pagination);
+      const normalizedResponse = normalizeStoriesResponse(data);
+
+      setStories(normalizedResponse.stories);
+      setPagination(normalizedResponse.pagination);
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Unable to load stories");
     } finally {
